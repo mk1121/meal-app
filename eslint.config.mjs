@@ -13,6 +13,16 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    files: ["jest.config.js", "jest.setup.js"],
+    languageOptions: {
+      sourceType: "commonjs",
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "@typescript-eslint/no-var-requires": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;
