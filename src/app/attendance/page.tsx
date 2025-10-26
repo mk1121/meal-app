@@ -1,27 +1,55 @@
 // src/app/attendance/page.tsx
+
 'use client'; 
 
-import { CalendarIcon, Loader2Icon, ClipboardListIcon } from 'lucide-react';
+import { CalendarIcon, ClipboardListIcon } from 'lucide-react';
 import Header from '@/components/Header';
 import EmployeeListItem from '@/components/EmployeeListItem';
 import SaveFAB from '@/components/SaveFAB';
 import { useState, useEffect, useCallback } from 'react';
 import { getDailyAttendance, saveAttendanceBulk, AttendanceListItem } from '@/utils/api'; 
 
-// --- Helper to format date for API (Adjust as necessary for your actual system date needs) ---
-const formatDateForAPIMock = (dateLabel: string): string => {
-    // MOCK: If the label says "October 26", we use the format the API expects ("10/26/2025")
-    if (dateLabel.includes("October 26")) return "10/26/2025"; 
-    if (dateLabel.includes("October 27")) return "10/27/2025";
-    return "10/26/2025"; // Default
+// --- Helper to format date for API (Crucial for API connection) ---
+// Formats JS Date object into MM/DD/YYYY string expected by GET /date endpoint
+const formatDateForAPI = (date: Date): string => {
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${month}/${day}/${year}`;
 };
 
-// --- MOCK AUTH TOKEN ---
-const MOCK_AUTH_TOKEN = 'YOUR_SECRET_ORDS_TOKEN_HERE'; // <<< IMPORTANT: REPLACE THIS with actual token/session logic
+// Format Date for input[type="date"] (YYYY-MM-DD)
+const formatDateForInput = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+// Human-friendly label for header
+const formatHumanLabel = (date: Date): string => {
+  const today = new Date();
+  const isSameDay =
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate();
+  if (isSameDay) {
+    return `Today, ${today.toLocaleString('default', { month: 'long', day: 'numeric' })}`;
+  }
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+};
+
+// --- Auth Token ---
+// Use public env var for client-side requests; if not set, requests will go without Authorization header.
+const AUTH_TOKEN = process.env.NEXT_PUBLIC_ORDS_TOKEN;
 
 export default function DailyAttendancePage() {
   
-  const [currentDateLabel, setCurrentDateLabel] = useState("Today, October 26");
+  // State for the date picker control
+  const [currentDateLabel, setCurrentDateLabel] = useState<string>(""); // Start empty, set in useEffect
+  const [currentDateObj, setCurrentDateObj] = useState<Date>(new Date()); // Holds the actual Date object
+  
+  // State for data fetched from API
   const [employees, setEmployees] = useState<AttendanceListItem[]>([]);
   const [lunchCount, setLunchCount] = useState(0);
   const [dinnerCount, setDinnerCount] = useState(0);
@@ -29,69 +57,110 @@ export default function DailyAttendancePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+  // Pagination
+  const [limit, setLimit] = useState<number>(25);
+  const [offset, setOffset] = useState<number>(0);
+  const [hasMore, setHasMore] = useState<boolean>(false);
+  // Note: pageCount not required in UI now; omit to keep linter happy
 
   // Function to fetch data, called when date changes
-  const loadData = useCallback(async (dateLabel: string, token?: string) => {
+  const loadData = useCallback(async (dateObj: Date, token?: string, nextOffset?: number) => {
     setIsLoading(true);
-    const apiDate = formatDateForAPIMock(dateLabel); 
+    const apiDateString = formatDateForAPI(dateObj); // Use the helper to format the real date
+    
     try {
-      const data = await getDailyAttendance(apiDate, token);
+      // The mock API logic in api.ts needs adjustment to handle a real date string, 
+      // as it currently only returns data for "October 26".
+      // For now, we'll just pass the formatted string and rely on the mock to return *something*.
+  const effOffset = typeof nextOffset === 'number' ? nextOffset : offset;
+  const data = await getDailyAttendance(apiDateString, token, limit, effOffset); 
+      
       setEmployees(data.items);
       setLunchCount(data.lunchCount);
       setDinnerCount(data.dinnerCount);
+      setHasMore(data.hasMore);
+      setOffset(data.offset);
+      setLimit(data.limit);
       setToastMessage(null); 
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to load data:", error);
       setEmployees([]);
-      setToastMessage({ message: `Load Error: ${error.message.substring(0, 50)}...`, type: 'error' });
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      setToastMessage({ message: `Load Error: ${msg.substring(0, 50)}...`, type: 'error' });
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [limit, offset]);
 
+  // We want this to run only once on mount; loadData identity changes with offset/limit.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    loadData(currentDateLabel, MOCK_AUTH_TOKEN);
-  }, [currentDateLabel, loadData]);
+    // 1. Set the UI Label based on the current date object
+    const today = new Date();
+    setCurrentDateLabel(formatHumanLabel(today));
+    setCurrentDateObj(today);
+    
+    // 2. Load data for today's date
+    loadData(today, AUTH_TOKEN, 0);
+  }, []);
 
   // Handler to update state when a toggle is flipped
   const handleAttendanceUpdate = (id: number, mealType: 'lunch' | 'dinner', isChecked: boolean) => {
-    setEmployees(prevEmployees => 
-      prevEmployees.map(emp => 
+    setEmployees(prevEmployees => {
+      const next = prevEmployees.map(emp =>
         emp.id === id ? { ...emp, [mealType]: isChecked } : emp
-      )
-    );
+      );
+      // recalc counts so summary updates immediately
+      const l = next.reduce((acc, e) => acc + (e.lunch ? 1 : 0), 0);
+      const d = next.reduce((acc, e) => acc + (e.dinner ? 1 : 0), 0);
+      setLunchCount(l);
+      setDinnerCount(d);
+      return next;
+    });
   };
 
-  // Handler for the Save FAB
+  // Handler for the Save FAB (Keep the logic the same, but ensure currentDateLabel is used)
   const handleSave = async () => {
     if (isLoading || isSaving || employees.length === 0) return;
 
     setIsSaving(true);
     
+    // ORDS কলামে PAYMENT_STATUS এর max length 10; এখানে ভ্যালু স্যানিটাইজ করি
+    const normalizePaymentStatus = (status: string | undefined): string => {
+      const raw = (status || '').trim().toLowerCase();
+      if (raw.startsWith('paid')) return 'Paid';
+      if (raw.startsWith('unpaid')) return 'Unpaid';
+      if (raw.startsWith('pending')) return 'Pending';
+      // অজানা হলে ফাঁকা বা কাটছাঁট
+      const capped = (status || '').trim().slice(0, 10);
+      return capped || 'Pending';
+    };
+    
     const payload = employees.map(emp => ({
         attendance_id: emp.id,
-        emp_code: emp.emp_code, // Use the emp_code from the fetched record!
-        attendance_date: formatDateForAPIMock(currentDateLabel),
-        is_taking_lunch: emp.lunch ? 1 : 0,
-        is_taking_dinner: emp.dinner ? 1 : 0,
-        payment_status: "Pending_Update",
+        emp_code: emp.emp_code,
+        attendance_date: formatDateForAPI(currentDateObj), // Use the Date Object for consistency
+  is_taking_lunch: (emp.lunch ? 1 : 0) as 0 | 1,
+  is_taking_dinner: (emp.dinner ? 1 : 0) as 0 | 1,
+        // আগের মান থাকলে সেটাই ব্যবহার, না থাকলে 'Pending'; ১০ অক্ষরের মধ্যে রাখা বাধ্যতামূলক
+        payment_status: normalizePaymentStatus(emp.payment_status),
     }));
     
     try {
-        const result = await saveAttendanceBulk(payload, MOCK_AUTH_TOKEN);
+    const result = await saveAttendanceBulk(payload, AUTH_TOKEN);
         setToastMessage({ message: `Save Success! ${result.message}`, type: 'success' });
         
-        // Re-fetch data to confirm save and get fresh counts
-        loadData(currentDateLabel, MOCK_AUTH_TOKEN); 
+  loadData(currentDateObj, AUTH_TOKEN, offset); 
 
-    } catch (error: any) {
-        setToastMessage({ message: `Save Failed: ${error.message}`, type: 'error' });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    setToastMessage({ message: `Save Failed: ${msg}`, type: 'error' });
     } finally {
         setIsSaving(false);
     }
   };
 
-  // --- Conditional Rendering Blocks ---
+  // --- Conditional Rendering Blocks (Remain the same) ---
   const renderLoadingState = () => (
     <div className="space-y-3 pt-4 animate-pulse">
       {[...Array(5)].map((_, index) => (
@@ -150,12 +219,24 @@ export default function DailyAttendancePage() {
               <h2 className="text-lg font-medium text-gray-800">
                 {currentDateLabel}
               </h2>
-              <button 
-                aria-label="Open Calendar"
-                className="p-1 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-              >
-                <CalendarIcon className="w-6 h-6" />
-              </button>
+              <label className="flex items-center space-x-2 text-blue-700">
+                <CalendarIcon className="w-5 h-5" />
+                <input
+                  type="date"
+                  aria-label="Pick a date"
+                  className="border border-blue-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  value={formatDateForInput(currentDateObj)}
+                  onChange={(e) => {
+                    const val = e.target.value; // yyyy-mm-dd
+                    if (!val) return;
+                    const [yy, mm, dd] = val.split('-').map((n) => Number(n));
+                    const chosen = new Date(yy, (mm || 1) - 1, dd || 1);
+                    setCurrentDateObj(chosen);
+                    setCurrentDateLabel(formatHumanLabel(chosen));
+                    loadData(chosen, AUTH_TOKEN, 0);
+                  }}
+                />
+              </label>
             </div>
 
             {/* Quick Summary Stats */}
@@ -180,6 +261,26 @@ export default function DailyAttendancePage() {
             ) : (
               renderDataList()
             )}
+            {/* Pagination Controls */}
+            <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+              <button
+                className="px-3 py-1 rounded border border-gray-300 bg-white disabled:opacity-50"
+                onClick={() => loadData(currentDateObj, AUTH_TOKEN, Math.max(0, offset - limit))}
+                disabled={isLoading || offset === 0}
+              >
+                Prev
+              </button>
+              <div>
+                <span>Showing {employees.length} • Offset {offset}</span>
+              </div>
+              <button
+                className="px-3 py-1 rounded border border-gray-300 bg-white disabled:opacity-50"
+                onClick={() => loadData(currentDateObj, AUTH_TOKEN, offset + limit)}
+                disabled={isLoading || !hasMore}
+              >
+                Next
+              </button>
+            </div>
           </section>
         </main>
 
