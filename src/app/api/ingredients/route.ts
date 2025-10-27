@@ -8,7 +8,8 @@ export const runtime = 'nodejs';
 const ING_URL =
   process.env.ORDS_INGREDIENTS_URL?.trim() ||
   process.env.NEXT_PUBLIC_ORDS_INGREDIENTS_URL?.trim() ||
-  'https://mailnts.informatixsystems.com:8443/ords/intern/mms_ingredients/all';
+  // Updated per request to NTS endpoint
+  'https://mailnts.informatixsystems.com:8443/ords/intern/NTS/ingredient';
 
 const AUTH_TOKEN = process.env.ORDS_TOKEN?.trim() || process.env.NEXT_PUBLIC_ORDS_TOKEN?.trim();
 
