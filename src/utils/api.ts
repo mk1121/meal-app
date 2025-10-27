@@ -1,13 +1,7 @@
 // src/utils/api.ts
 
-// Separate endpoints for GET (NTS/attendance) and SAVE (fallback to previous add endpoint unless overridden)
-const ATTENDANCE_GET_URL =
-    process.env.NEXT_PUBLIC_ORDS_GET_URL?.trim() ||
-    "https://mailnts.informatixsystems.com:8443/ords/intern/NTS/attendance";
-
-const ATTENDANCE_SAVE_URL =
-    process.env.NEXT_PUBLIC_ORDS_SAVE_URL?.trim() ||
-    "https://mailnts.informatixsystems.com:8443/ords/intern/mms1_attendance1/add";
+// Use internal Next.js proxy route
+const ATTENDANCE_API = "/api/attendance";
 
 // --- API Types ---
 interface ApiAttendanceRecord {
@@ -118,15 +112,15 @@ export const getDailyAttendance = async (
     limit: number = 25,
     offset: number = 0
 ): Promise<AttendanceListResponse> => {
-        // Server expects slashes unencoded (10/16/2025), so avoid URLSearchParams for date
-        const url = `${ATTENDANCE_GET_URL}?attendance_date=${dateString}&limit=${limit}&offset=${offset}`;
+        // Call same-origin API route; proxy will forward to ORDS with raw slashes
+        const url = `${ATTENDANCE_API}?attendance_date=${dateString}&limit=${limit}&offset=${offset}`;
     
     try {
         const response = await fetch(url, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                ...(authToken && { 'Authorization': `Bearer ${authToken}` }), 
+                // No client-side token; proxy adds Authorization server-side
             },
         });
 
@@ -189,15 +183,15 @@ export type SaveAttendancePayload = {
     payment_status: string;
 };
 
-export const saveAttendanceBulk = async (payload: SaveAttendancePayload[], authToken?: string) => {
-    const url = ATTENDANCE_SAVE_URL;
+export const saveAttendanceBulk = async (payload: SaveAttendancePayload[]) => {
+    const url = ATTENDANCE_API; // POST to proxy
     
     try {
         const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
+                // No client-side token; proxy adds Authorization server-side
             },
             body: JSON.stringify(payload),
         });
