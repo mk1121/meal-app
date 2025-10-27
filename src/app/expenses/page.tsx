@@ -194,16 +194,16 @@ export default function DailyExpensesPage() {
         <Header title="Daily Expenses" />
 
   {/* Sticky Summary Bar (stay below header) */}
-  <div className="sticky top-16 z-10 bg-white border-b border-gray-100 px-3 py-2 flex items-center justify-between">
+        <div className="sticky top-16 z-10 bg-white border-b border-gray-100 px-3 py-2 flex items-center justify-between gap-2">
           <div
-            className="flex items-center gap-2 px-2 py-1 border border-gray-200 rounded-md text-sm cursor-pointer select-none relative"
+            className="flex-1 min-w-0 flex items-center gap-2 px-2 py-1 border border-gray-200 rounded-md text-sm cursor-pointer select-none relative"
             role="button"
             tabIndex={0}
             onClick={openDatePicker}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDatePicker(); } }}
           >
             <CalendarIcon className="w-4 h-4 text-blue-700" />
-            <span className="text-gray-800">{formatHumanLabel(dateObj)}</span>
+            <span className="text-gray-800 truncate whitespace-nowrap">{formatHumanLabel(dateObj)}</span>
             <input
               ref={dateInputRef}
               type="date"
@@ -219,7 +219,7 @@ export default function DailyExpensesPage() {
               }}
             />
           </div>
-          <div className="text-right">
+          <div className="text-right shrink-0">
             <div className="text-xs text-gray-500">Total</div>
             <div className="text-lg font-bold" style={{ color: '#2E7D32' }}>{formatCurrency(totalCost)}</div>
           </div>

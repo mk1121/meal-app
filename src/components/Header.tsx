@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { MenuIcon, X as XIcon, ClipboardList, UtensilsCrossed, Settings } from 'lucide-react';
+import { MenuIcon, X as XIcon, ClipboardList, UtensilsCrossed, BarChart3 } from 'lucide-react';
 import { UserIcon } from 'lucide-react';
 
 // Define styles based on the professional visual style guide
@@ -80,9 +80,9 @@ export default function Header({ title = 'Daily Attendance' }: { title?: string 
                 <UtensilsCrossed className="w-8 h-8 text-gray-700 mb-2" />
                 <span className="text-sm font-medium text-gray-800">Daily Expenses</span>
               </Link>
-              <Link href="#" onClick={() => setOpen(false)} className="rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col items-center justify-center active:scale-[0.98]">
-                <Settings className="w-8 h-8 text-gray-700 mb-2" />
-                <span className="text-sm font-medium text-gray-800">Settings</span>
+              <Link href="/predictions" onClick={() => setOpen(false)} className="rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col items-center justify-center active:scale-[0.98]">
+                <BarChart3 className="w-8 h-8 text-gray-700 mb-2" />
+                <span className="text-sm font-medium text-gray-800">Predictions</span>
               </Link>
             </div>
           </div>
@@ -108,9 +108,9 @@ export default function Header({ title = 'Daily Attendance' }: { title?: string 
                 <UtensilsCrossed className="w-5 h-5 text-gray-700" />
                 <span className="text-sm font-medium text-gray-800">Daily Expenses</span>
               </Link>
-              <Link href="#" onClick={() => setOpen(false)} className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-gray-50 active:bg-gray-100">
-                <Settings className="w-5 h-5 text-gray-700" />
-                <span className="text-sm font-medium text-gray-800">Settings</span>
+              <Link href="/predictions" onClick={() => setOpen(false)} className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-gray-50 active:bg-gray-100">
+                <BarChart3 className="w-5 h-5 text-gray-700" />
+                <span className="text-sm font-medium text-gray-800">Predictions</span>
               </Link>
             </nav>
           </div>

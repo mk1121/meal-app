@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
+import https from 'https';
 
 export const runtime = 'nodejs';
+
+// Insecure agent for development/LAN to bypass self-signed TLS issues
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 const ING_URL =
   process.env.ORDS_INGREDIENTS_URL?.trim() ||
@@ -17,6 +21,8 @@ export async function GET() {
         'Content-Type': 'application/json',
         ...(AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {}),
       },
+      // @ts-expect-error node fetch supports agent in node runtime
+      agent: httpsAgent,
       cache: 'no-store',
     });
 

@@ -248,7 +248,7 @@ export default function DailyAttendancePage() {
           <section>
             {/* Date Picker Card (click to open hidden input) */}
             <div
-              className="flex justify-between items-center mb-4 bg-white p-3 rounded-xl shadow-sm border border-gray-100 cursor-pointer select-none relative"
+              className="flex justify-between items-center gap-2 mb-4 bg-white p-3 rounded-xl shadow-sm border border-gray-100 cursor-pointer select-none relative"
               role="button"
               tabIndex={0}
               onClick={openDatePicker}
@@ -259,10 +259,10 @@ export default function DailyAttendancePage() {
                 }
               }}
             >
-              <h2 className="text-lg font-medium text-gray-800">
+              <h2 className="flex-1 min-w-0 text-lg font-medium text-gray-800 truncate whitespace-nowrap">
                 {currentDateLabel}
               </h2>
-              <div className="relative">
+              <div className="relative shrink-0">
                 <CalendarIcon className="w-5 h-5 text-blue-700" />
                 {/* Position the input right below the icon so native picker anchors under it */}
                 <input
