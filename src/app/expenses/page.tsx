@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency, formatDateForInput, formatHumanLabel, ExpenseItem, createEmptyExpense, computeRowTotal, computeTotalCost, formatDateForAPI, getExpensesForDate } from '@/utils/expenses';
 import { CalendarIcon } from 'lucide-react';
 import { getIngredients, type IngredientOption } from '@/utils/ingredients';
+import ToastBanner from '@/components/ToastBanner';
 
 export default function DailyExpensesPage() {
   const [dateObj, setDateObj] = useState<Date>(new Date());
@@ -14,6 +15,7 @@ export default function DailyExpensesPage() {
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const idCounterRef = useRef<number>(1);
   const [ingredients, setIngredients] = useState<IngredientOption[]>([]);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   const totalCost = useMemo(() => computeTotalCost(items), [items]);
 
@@ -56,6 +58,14 @@ export default function DailyExpensesPage() {
     try {
       const loaded = await getExpensesForDate(d);
       setItems(loaded);
+      // Ensure new row IDs don't collide with loaded items
+      const maxId = loaded.reduce<number>((m, it) => {
+        const idNum = typeof it.id === 'number' ? it.id : 0;
+        return idNum > m ? idNum : m;
+      }, 0);
+      if (Number.isFinite(maxId)) {
+        idCounterRef.current = Math.max(idCounterRef.current, maxId + 1);
+      }
     } catch (e) {
       console.error('Failed to load expenses', e);
       setItems([]);
@@ -136,9 +146,14 @@ export default function DailyExpensesPage() {
         .map(it => {
           const qty = typeof it.qty === 'number' && !isNaN(it.qty) ? it.qty : null;
           const price = typeof it.price === 'number' && !isNaN(it.price) ? it.price : null;
-          const ingredient_id = typeof it.ingredientId === 'number' && isFinite(it.ingredientId)
+          // Best-effort resolve ingredient_id: prefer existing id, else match by name
+          let ingredient_id = (typeof it.ingredientId === 'number' && isFinite(it.ingredientId))
             ? it.ingredientId
             : null;
+          if ((ingredient_id == null) && it.ingredient && ingredients && ingredients.length > 0) {
+            const found = ingredients.find(opt => opt.name.toLowerCase().trim() === (it.ingredient || '').toLowerCase().trim());
+            if (found && typeof found.id === 'number') ingredient_id = found.id as number;
+          }
           if (ingredient_id == null || qty == null || price == null) return null;
           const row: Record<string, unknown> = {
             expense_date,
@@ -153,7 +168,7 @@ export default function DailyExpensesPage() {
         .filter(Boolean);
 
       if (payload.length === 0) {
-        alert('Nothing to save. Please fill ingredient, quantity and price.');
+        setToast({ message: 'Nothing to save. Please select ingredient (from list) and fill quantity and price.', type: 'info' });
         return;
       }
 
@@ -164,10 +179,10 @@ export default function DailyExpensesPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.body || data?.error || 'Save failed');
-      alert(data?.message || 'Saved successfully.');
+      setToast({ message: data?.message || 'Saved successfully.', type: 'success' });
     } catch (e) {
       console.error(e);
-      alert('Save failed.');
+      setToast({ message: 'Save failed.', type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -235,7 +250,7 @@ export default function DailyExpensesPage() {
           ) : (
             items.map(item => (
               <ExpenseRow
-                key={item.id}
+                key={`${item.persisted ? 'p' : 'n'}-${item.id}`}
                 item={item}
                 onChange={handleChange}
                 onDelete={handleDelete}
@@ -255,6 +270,10 @@ export default function DailyExpensesPage() {
             </button>
           </div>
         </div>
+
+        {toast && (
+          <ToastBanner message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+        )}
       </div>
     </div>
   );

@@ -26,6 +26,9 @@ export default function IngredientAutocomplete({ value, onChange, onSelect, opti
     <Combobox value={value} onChange={(val: string | null) => {
       if (typeof val === 'string') {
         onChange?.(val);
+        // If user selected an option (via click or keyboard), try to resolve and emit onSelect
+        const found = options.find(o => o.name.toLowerCase() === val.toLowerCase());
+        if (found) onSelect?.(found);
       }
     }}>
       <div className="relative">

@@ -6,6 +6,7 @@ import { CalendarIcon, ClipboardListIcon } from 'lucide-react';
 import Header from '@/components/Header';
 import EmployeeListItem from '@/components/EmployeeListItem';
 import SaveFAB from '@/components/SaveFAB';
+import ToastBanner from '@/components/ToastBanner';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getDailyAttendance, saveAttendanceBulk, AttendanceListItem } from '@/utils/api'; 
 import { Switch } from '@headlessui/react';
@@ -71,10 +72,9 @@ export default function DailyAttendancePage() {
     const el = dateInputRef.current;
     if (!el) return;
     try {
-      // @ts-ignore - showPicker is available in modern Chromium
-      if (typeof el.showPicker === 'function') {
-        // @ts-ignore
-        el.showPicker();
+      const picker = el as unknown as { showPicker?: () => void };
+      if (typeof picker.showPicker === 'function') {
+        picker.showPicker();
       } else {
         el.focus();
         el.click();
@@ -382,6 +382,10 @@ export default function DailyAttendancePage() {
             toastMessage={toastMessage} 
             setToastMessage={setToastMessage} 
         />
+
+        {toastMessage && (
+          <ToastBanner message={toastMessage.message} type={toastMessage.type} onClose={() => setToastMessage(null)} />
+        )}
       </div>
     </div>
   );
