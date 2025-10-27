@@ -6,8 +6,9 @@ import { CalendarIcon, ClipboardListIcon } from 'lucide-react';
 import Header from '@/components/Header';
 import EmployeeListItem from '@/components/EmployeeListItem';
 import SaveFAB from '@/components/SaveFAB';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getDailyAttendance, saveAttendanceBulk, AttendanceListItem } from '@/utils/api'; 
+import { Switch } from '@headlessui/react';
 
 // --- Helper to format date for API (Crucial for API connection) ---
 // Formats JS Date object into MM/DD/YYYY string expected by GET /date endpoint
@@ -57,11 +58,32 @@ export default function DailyAttendancePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+  // run-once guard for initial load to satisfy hooks rules without re-fetch loops
+  const didInitRef = useRef(false);
   // Pagination
   const [limit, setLimit] = useState<number>(25);
   const [offset, setOffset] = useState<number>(0);
   const [hasMore, setHasMore] = useState<boolean>(false);
   // Note: pageCount not required in UI now; omit to keep linter happy
+  const dateInputRef = useRef<HTMLInputElement | null>(null);
+
+  const openDatePicker = useCallback(() => {
+    const el = dateInputRef.current;
+    if (!el) return;
+    try {
+      // @ts-ignore - showPicker is available in modern Chromium
+      if (typeof el.showPicker === 'function') {
+        // @ts-ignore
+        el.showPicker();
+      } else {
+        el.focus();
+        el.click();
+      }
+    } catch {
+      el.focus();
+      el.click();
+    }
+  }, []);
 
   // Function to fetch data, called when date changes
   const loadData = useCallback(async (dateObj: Date, token?: string, nextOffset?: number) => {
@@ -92,17 +114,15 @@ export default function DailyAttendancePage() {
     }
   }, [limit, offset]);
 
-  // We want this to run only once on mount; loadData identity changes with offset/limit.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Run only once on mount; guard with ref while keeping loadData in deps to satisfy lint rule
   useEffect(() => {
-    // 1. Set the UI Label based on the current date object
-    const today = new Date();
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+    const today = new Date('2025-10-27T12:00:00');
     setCurrentDateLabel(formatHumanLabel(today));
     setCurrentDateObj(today);
-    
-    // 2. Load data for today's date
     loadData(today, AUTH_TOKEN, 0);
-  }, []);
+  }, [loadData]);
 
   // Handler to update state when a toggle is flipped
   const handleAttendanceUpdate = (id: number, mealType: 'lunch' | 'dinner', isChecked: boolean) => {
@@ -111,6 +131,18 @@ export default function DailyAttendancePage() {
         emp.id === id ? { ...emp, [mealType]: isChecked } : emp
       );
       // recalc counts so summary updates immediately
+      const l = next.reduce((acc, e) => acc + (e.lunch ? 1 : 0), 0);
+      const d = next.reduce((acc, e) => acc + (e.dinner ? 1 : 0), 0);
+      setLunchCount(l);
+      setDinnerCount(d);
+      return next;
+    });
+  };
+
+  // Master toggles: turn all lunch or dinner on/off at once
+  const handleToggleAll = (mealType: 'lunch' | 'dinner', value: boolean) => {
+    setEmployees(prev => {
+      const next = prev.map(emp => ({ ...emp, [mealType]: value }));
       const l = next.reduce((acc, e) => acc + (e.lunch ? 1 : 0), 0);
       const d = next.reduce((acc, e) => acc + (e.dinner ? 1 : 0), 0);
       setLunchCount(l);
@@ -147,7 +179,7 @@ export default function DailyAttendancePage() {
     }));
     
     try {
-    const result = await saveAttendanceBulk(payload, AUTH_TOKEN);
+  const result = await saveAttendanceBulk(payload);
         setToastMessage({ message: `Save Success! ${result.message}`, type: 'success' });
         
   loadData(currentDateObj, AUTH_TOKEN, offset); 
@@ -214,17 +246,30 @@ export default function DailyAttendancePage() {
 
         <main className="p-4 space-y-6">
           <section>
-            {/* Date Picker */}
-            <div className="flex justify-between items-center mb-4 bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+            {/* Date Picker Card (click to open hidden input) */}
+            <div
+              className="flex justify-between items-center mb-4 bg-white p-3 rounded-xl shadow-sm border border-gray-100 cursor-pointer select-none relative"
+              role="button"
+              tabIndex={0}
+              onClick={openDatePicker}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  openDatePicker();
+                }
+              }}
+            >
               <h2 className="text-lg font-medium text-gray-800">
                 {currentDateLabel}
               </h2>
-              <label className="flex items-center space-x-2 text-blue-700">
-                <CalendarIcon className="w-5 h-5" />
+              <div className="relative">
+                <CalendarIcon className="w-5 h-5 text-blue-700" />
+                {/* Position the input right below the icon so native picker anchors under it */}
                 <input
+                  ref={dateInputRef}
                   type="date"
                   aria-label="Pick a date"
-                  className="border border-blue-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="absolute right-0 top-full mt-2 opacity-0 h-8 w-28 pointer-events-none"
                   value={formatDateForInput(currentDateObj)}
                   onChange={(e) => {
                     const val = e.target.value; // yyyy-mm-dd
@@ -236,7 +281,7 @@ export default function DailyAttendancePage() {
                     loadData(chosen, AUTH_TOKEN, 0);
                   }}
                 />
-              </label>
+              </div>
             </div>
 
             {/* Quick Summary Stats */}
@@ -250,6 +295,52 @@ export default function DailyAttendancePage() {
                 <span className="font-bold text-gray-700">Dinner: {dinnerCount}</span>
               </div>
             </div>
+
+            {/* Master Toggles: All Lunch / All Dinner */}
+            {employees.length > 0 && (
+              <div className="mt-3 bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between gap-4">
+                  {/* All Lunch */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium text-gray-700 truncate">All Lunch</span>
+                    {(() => {
+                      const allLunchOn = employees.length > 0 && employees.every(e => e.lunch);
+                      return (
+                        <Switch
+                          checked={allLunchOn}
+                          onChange={(v: boolean) => handleToggleAll('lunch', v)}
+                          className={`${allLunchOn ? 'bg-green-600' : 'bg-gray-200'} relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500`}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={`${allLunchOn ? 'translate-x-4' : 'translate-x-0'} pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                          />
+                        </Switch>
+                      );
+                    })()}
+                  </div>
+                  {/* All Dinner */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium text-gray-700 truncate">All Dinner</span>
+                    {(() => {
+                      const allDinnerOn = employees.length > 0 && employees.every(e => e.dinner);
+                      return (
+                        <Switch
+                          checked={allDinnerOn}
+                          onChange={(v: boolean) => handleToggleAll('dinner', v)}
+                          className={`${allDinnerOn ? 'bg-blue-600' : 'bg-gray-200'} relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={`${allDinnerOn ? 'translate-x-4' : 'translate-x-0'} pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                          />
+                        </Switch>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Employee List Content Area */}
