@@ -23,12 +23,9 @@ export default function IngredientAutocomplete({ value, onChange, onSelect, opti
   }, [options, query]);
 
   return (
-    <Combobox value={value} onChange={(val: string | IngredientOption) => {
+    <Combobox value={value} onChange={(val: string | null) => {
       if (typeof val === 'string') {
         onChange?.(val);
-      } else if (val && typeof val === 'object') {
-        onChange?.(val.name);
-        onSelect?.(val as IngredientOption);
       }
     }}>
       <div className="relative">
@@ -43,7 +40,8 @@ export default function IngredientAutocomplete({ value, onChange, onSelect, opti
             {filtered.map((opt) => (
               <Combobox.Option
                 key={(opt.id ?? opt.name).toString()}
-                value={opt}
+                value={opt.name}
+                onClick={() => onSelect?.(opt)}
                 className={({ active }) => `cursor-pointer select-none px-3 py-2 ${active ? 'bg-blue-50 text-blue-700' : 'text-gray-800'}`}
               >
                 {opt.name}
